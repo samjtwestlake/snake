@@ -136,7 +136,7 @@ function directionForDirectPath(bitmap, direction, head, tail, food, pathLength=
         let [xStep, yStep] = [DIR_VECS[dir][0], DIR_VECS[dir][1]]
         let clear = true
         let [x, y] = [x1, y1]
-        while (x != x2 && y != y2) {
+        while ((x != x2 | x1 == x2) && (y != y2 | y1 == y2)) {
             if (bitmap[x][y] == BITMAP_LABELS.TAIL)
                 clear = false
             x = mod(x+xStep, X)
@@ -150,7 +150,7 @@ function directionForDirectPath(bitmap, direction, head, tail, food, pathLength=
                 [x, y] = [mod(x - xStep, X), mod(y - yStep, Y)]
                 let dir2 = directionForDirectPath(bitmap, dir, {x: x, y: y}, tail, food, n)
                 if (dir2)
-                    cands.push([dir, n])
+                    cands.push([dir, pathLength+n])
             }
         }
     }
@@ -286,19 +286,6 @@ window.changeDirection = ({
     console.time('directionCalc')
     let newDirection = calcNewDirection(state, bitmap)
     console.timeEnd('directionCalc')
-
-    let debug = {
-        bitmap: bitmap
-    }
-    
-    let info = {
-        state: state,
-        debug: debug
-    }
-
-    let textarea = document.getElementsByTagName('textarea')[0]
-    textarea.dataset.info = JSON.stringify(info)
-    textarea.dataset.infoRead = false
 
     prevHead = head
 
