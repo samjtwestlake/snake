@@ -17,7 +17,7 @@ const bitmapLabels = {
     FOOD: 5,
 }
 var foodIsNeighbour = false
-const MAX_RECURSION_DEPTH = 100
+const MAX_RECURSION_DEPTH = 50
 
 function deriveBitmap(head, tail, food, width, height) {
     let bitmap = new Array(width)
@@ -89,31 +89,6 @@ function isValidPos(bitmap, nextPos) {
     return true
 }
 
-function calcSafeDirs(bitmap, head, direction) {
-    let possDirs = []
-    let oppDirections = {
-        left: 'right',
-        right: 'left',
-        down: 'up',
-        up: 'down',
-    }
-
-    for (let dir in DIR_VECS) {
-        if (dir == oppDirections[direction]) {
-            continue
-        }
-        let nextPos = {
-            x: mod(head.x + DIR_VECS[dir][0], X),
-            y: mod(head.y + DIR_VECS[dir][1], Y)
-        }
-        
-        if (bitmap[nextPos.x][nextPos.y] == bitmapLabels.TAIL) {
-            possDirs.push(dir)
-        }
-    }
-    return possDirs
-}
-
 function calcPossDirections(bitmap, head, direction) {
     let possDirs = []
     let oppDirections = {
@@ -171,8 +146,7 @@ function recurseForDirection(bitmap, direction, head, tail, food, depth=0) {
         return possDirs[0]
     } else if (depth > MAX_RECURSION_DEPTH) {
         console.log('Max recursion level reached. Returning...')
-        let safeDirs = calcSafeDirs(newBitmap, newHead, direction)
-        return safeDirs[0]
+        return possDirs[0]
     }
 
     let rankedDirs = rankDirections(possDirs, direction, newHead, food)
