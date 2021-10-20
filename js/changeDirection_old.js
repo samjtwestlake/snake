@@ -55,7 +55,7 @@ function calcNewPos(pos, direction) {
     }
 }
 
-function recurseForEmptySpace(bitmap, pos, length, space=0, recurseHash = {}) {
+function recurseForEmptySpace(bitmap, direction, pos, length, space=0, recurseHash = {}) {
     recurseHash[JSON.stringify(pos)] = true
     let { x, y } = pos
     if (bitmap[x][y] == BITMAP_LABELS.TAIL) {
@@ -69,11 +69,13 @@ function recurseForEmptySpace(bitmap, pos, length, space=0, recurseHash = {}) {
 
     let newSpace = space
     for (let dir in DIR_VECS) {
+        // if (dir == OPP_DIRS[direction])
+        //     continue
         let newPos = calcNewPos(pos, dir)
         if (JSON.stringify(newPos) in recurseHash)
             continue
         if (bitmap[newPos.x][newPos.y] != BITMAP_LABELS.TAIL) {
-            newSpace = recurseForEmptySpace(copyBitmap(bitmap), newPos, length, space, recurseHash)
+            newSpace = recurseForEmptySpace(copyBitmap(bitmap), dir, newPos, length, space, recurseHash)
             if (newSpace > length) {
                 return newSpace
             }
@@ -93,7 +95,7 @@ function calcPossDirections(bitmap, direction, head, tail, ignoreLoop=false) {
     for (let dir in DIR_VECS) {
         if (dir == OPP_DIRS[direction])
             continue
-        let emptySpace = recurseForEmptySpace(copyBitmap(newBitmap), calcNewPos(newHead, dir), length)
+        let emptySpace = recurseForEmptySpace(copyBitmap(newBitmap), dir, calcNewPos(newHead, dir), length)
         if (emptySpace == 0) {
             // console.log(`Direction ${dir} avoided, obstacle in path`)
         } else if (!ignoreLoop && emptySpace < length) {
@@ -117,40 +119,65 @@ function directionForDirectPath(bitmap, direction, head, tail, food, pathLength=
         return possDirs[0]
 
     let cands = []
-    let dirs, onLine
     if (dx == 0) {
-        dirs = ['up', 'down']
-        onLine = true
-    } else if (dy == 0) {
-        dirs = ['right', 'left']
-        onLine = true
-    } else {
-        dirs = Object.keys(DIR_VECS)
-        onLine = false
-    }
-
-    for (let dir of dirs) {
-        if (!possDirs.includes(dir))
-            continue
-        n = 0
-        let [xStep, yStep] = [DIR_VECS[dir][0], DIR_VECS[dir][1]]
-        let clear = true
-        let [x, y] = [x1, y1]
-        while (x != x2 && y != y2) {
-            if (bitmap[x][y] == BITMAP_LABELS.TAIL)
-                clear = false
-            x = mod(x+xStep, X)
-            y = mod(y+yStep, Y)
-            n++
+        let dirs = ['up', 'down']
+        let x = x1
+        for (let dir of dirs) {
+            if (!possDirs.includes(dir))
+                continue
+            let yStep = DIR_VECS[dir][1]
+            let clear = true
+            let y = y1
+            n = 0
+            while(y != y2) {
+                if (bitmap[x][y] == BITMAP_LABELS.TAIL)
+                    clear = false
+                y = mod(y+yStep, Y)
+                n++
+            }
+            if (clear)
+                cands.push([dir, pathLength + n])
         }
-        if (clear) {
-            if (onLine) {
-                cands.push([dir, pathLength+n])
-            } else {
+    } else if (dy == 0) {
+        let dirs = ['right', 'left']
+        let y = y1
+        for (let dir of dirs) {
+            if (!possDirs.includes(dir))
+                continue
+            let xStep = DIR_VECS[dir][0]
+            let clear = true
+            let x = x1
+            n = 0
+            while(x != x2) {
+                if (bitmap[x][y] == BITMAP_LABELS.TAIL)
+                    clear = false
+                x = mod(x+xStep, X)
+                n++
+            }
+            if (clear)
+                cands.push([dir, pathLength + n])
+        }
+    } else {
+        for (let dir in DIR_VECS) {
+            pathLength = 0
+            if (!possDirs.includes(dir))
+                continue
+            let [xStep, yStep] = [DIR_VECS[dir][0], DIR_VECS[dir][1]]
+            let clear = true
+            let [x, y] = [x1, y1]
+            while (x != x2 && y != y2) {
+                if (bitmap[x][y] == BITMAP_LABELS.TAIL)
+                    clear = false
+                x = mod(x+xStep, X)
+                y = mod(y+yStep, Y)
+                pathLength++
+            }
+            if (clear) {
+                // return dir
                 [x, y] = [mod(x - xStep, X), mod(y - yStep, Y)]
-                let dir2 = directionForDirectPath(bitmap, dir, {x: x, y: y}, tail, food, n)
+                let dir2 = directionForDirectPath(bitmap, dir, {x: x, y: y}, tail, food, pathLength)
                 if (dir2)
-                    cands.push([dir, n])
+                    cands.push([dir, pathLength + n])
             }
         }
     }
