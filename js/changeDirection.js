@@ -14,6 +14,8 @@ const OPP_DIRS = {
     down: 'up',
 }
 
+
+
 const bitmapLabels = {
     EMPTY: 0,
     TAIL: 1,
@@ -23,8 +25,10 @@ const bitmapLabels = {
 
 var X
 var Y
+var prevHead
+var n
 
-function deriveBitmap(head, tail, food, width, height) {
+function deriveBitmap(direction, head, tail, food, width, height) {
     let bitmap = new Array(width)
     for (let x = 0; x < width; x++) {
         bitmap[x] = new Array(height)
@@ -36,7 +40,8 @@ function deriveBitmap(head, tail, food, width, height) {
     for (let seg of tail) {
         bitmap[seg.x][seg.y] = bitmapLabels.TAIL
     }
-    // bitmap[head.x][head.y] = bitmapLabels.HEAD
+    if (tail.length)
+        bitmap[prevHead.x][prevHead.y] = bitmapLabels.TAIL
     
     return bitmap
 }
@@ -52,7 +57,8 @@ function calcNewPos(head, direction) {
     }
 }
 
-function recurseForEmptySpace(bitmap, pos, length, space=0) {
+function recurseForEmptySpace(bitmap, direction, pos, length, space=0, recurseHash = {}) {
+    recurseHash[JSON.stringify(pos)] = true
     let { x, y } = pos
     if (bitmap[x][y] == bitmapLabels.TAIL) {
         // console.log("Empty space recursion located on tail")
@@ -64,19 +70,24 @@ function recurseForEmptySpace(bitmap, pos, length, space=0) {
         space++
     }
 
+    let newSpace = space
     for (let dir in DIR_VECS) {
+        // if (dir == OPP_DIRS[direction])
+        //     continue
         let newPos = calcNewPos(pos, dir)
+        if (JSON.stringify(newPos) in recurseHash)
+            continue
         if (bitmap[newPos.x][newPos.y] != bitmapLabels.TAIL) {
-            space = recurseForEmptySpace(copyBitmap(bitmap), newPos, length, space)
-            if (space > length) {
-                return space
+            newSpace = recurseForEmptySpace(copyBitmap(bitmap), dir, newPos, length, space, recurseHash)
+            if (newSpace > length) {
+                return newSpace
             }
         }
     }
     return space
 }
 
-function calcPossDirections(bitmap, direction, head, tail) {
+function calcPossDirections(bitmap, direction, head, tail, ignoreLoop=false) {
     let possDirs = []
     let newBitmap = copyBitmap(bitmap)
     let newHead = calcNewPos(head, direction)
@@ -87,10 +98,10 @@ function calcPossDirections(bitmap, direction, head, tail) {
     for (let dir in DIR_VECS) {
         if (dir == OPP_DIRS[direction])
             continue
-        let emptySpace = recurseForEmptySpace(copyBitmap(newBitmap), calcNewPos(newHead, dir), length)
+        let emptySpace = recurseForEmptySpace(copyBitmap(newBitmap), dir, calcNewPos(newHead, dir), length)
         if (emptySpace == 0) {
             // console.log(`Direction ${dir} avoided, obstacle in path`)
-        } else if (emptySpace < length) {
+        } else if (!ignoreLoop && emptySpace < length) {
             console.log(`Direction ${dir} avoided, ${emptySpace} cells of space insufficient`)
         } else {
             possDirs.push(dir)
@@ -99,7 +110,7 @@ function calcPossDirections(bitmap, direction, head, tail) {
     return possDirs
 }
 
-function directionForDirectPath(bitmap, direction, head, tail, food) {
+function directionForDirectPath(bitmap, direction, head, tail, food, pathLength=0) {
     let newHead = calcNewPos(head, direction)
     let possDirs = calcPossDirections(bitmap, direction, head, tail)
 
@@ -110,6 +121,7 @@ function directionForDirectPath(bitmap, direction, head, tail, food) {
     if (dx == 0 && dy == 0)
         return possDirs[0]
 
+    let cands = []
     if (dx == 0) {
         let dirs = ['up', 'down']
         let x = x1
@@ -119,13 +131,15 @@ function directionForDirectPath(bitmap, direction, head, tail, food) {
             let yStep = DIR_VECS[dir][1]
             let clear = true
             let y = y1
+            n = 0
             while(y != y2) {
                 if (bitmap[x][y] == bitmapLabels.TAIL)
                     clear = false
                 y = mod(y+yStep, Y)
+                n++
             }
             if (clear)
-                return dir
+                cands.push([dir, pathLength + n])
         }
     } else if (dy == 0) {
         let dirs = ['right', 'left']
@@ -136,16 +150,19 @@ function directionForDirectPath(bitmap, direction, head, tail, food) {
             let xStep = DIR_VECS[dir][0]
             let clear = true
             let x = x1
+            n = 0
             while(x != x2) {
                 if (bitmap[x][y] == bitmapLabels.TAIL)
                     clear = false
                 x = mod(x+xStep, X)
+                n++
             }
             if (clear)
-                return dir
+                cands.push([dir, pathLength + n])
         }
     } else {
         for (let dir in DIR_VECS) {
+            pathLength = 0
             if (!possDirs.includes(dir))
                 continue
             let [xStep, yStep] = [DIR_VECS[dir][0], DIR_VECS[dir][1]]
@@ -156,15 +173,24 @@ function directionForDirectPath(bitmap, direction, head, tail, food) {
                     clear = false
                 x = mod(x+xStep, X)
                 y = mod(y+yStep, Y)
+                pathLength++
             }
             if (clear) {
                 // return dir
                 [x, y] = [mod(x - xStep, X), mod(y - yStep, Y)]
-                let dir2 = directionForDirectPath(bitmap, dir, {x: x, y: y}, tail, food)
+                let dir2 = directionForDirectPath(bitmap, dir, {x: x, y: y}, tail, food, pathLength)
                 if (dir2)
-                    return dir
+                    cands.push([dir, pathLength + n])
             }
         }
+    }
+
+    if (cands.length) {
+        cands.sort(function(a, b) {
+            return a[1] - b[1]
+        })
+        n = cands[0][1]
+        return cands[0][0]
     }
     return false
 }
@@ -175,12 +201,12 @@ function copyBitmap(bitmap) {
     })
 }
 
-function directionForWrappingPath(bitmap, direction, head, tail) {
+function directionForWrappingPath(bitmap, direction, head, tail, ignoreLoop=false) {
     let newHead = calcNewPos(head, direction)
     let newBitmap = copyBitmap(bitmap)
     newBitmap[head.x][head.y] = bitmapLabels.TAIL
-    newBitmap[newHead.x][newHead.y] = bitmapLabels.TAIL
-    let possDirs = calcPossDirections(bitmap, direction, head, tail)
+    // newBitmap[newHead.x][newHead.y] = bitmapLabels.TAIL
+    let possDirs = calcPossDirections(bitmap, direction, head, tail, ignoreLoop)
     
     for (let dir of possDirs) {
         let newPos = calcNewPos(newHead, dir)
@@ -198,8 +224,17 @@ function directionForWrappingPath(bitmap, direction, head, tail) {
     return false
 }
 
+function straightDirection(bitmap, direction, head, tail) {
+    let ignoreLoop = true
+    let possDirs = calcPossDirections(bitmap, direction, head, tail, ignoreLoop)
+    if (possDirs.includes(direction))
+        return direction
+    return false
+}
+
 function perpDirection(bitmap, direction, head, tail) {
-    let possDirs = calcPossDirections(bitmap, direction, head, tail)
+    let ignoreLoop = true
+    let possDirs = calcPossDirections(bitmap, direction, head, tail, ignoreLoop)
     if (direction == 'left' | direction == 'right') {
         for (let dir of ['up', 'down']) {
             if (possDirs.includes(dir))
@@ -211,7 +246,7 @@ function perpDirection(bitmap, direction, head, tail) {
                 return dir
         }
     }
-    return null
+    return false
 }
 
 function calcNewDirection(state, bitmap) {
@@ -224,11 +259,22 @@ function calcNewDirection(state, bitmap) {
         newDirection = directionForWrappingPath(bitmap, direction, head, tail)
 
         if (newDirection == false) {
-            newDirection = perpDirection(bitmap, direction, head, tail)
-            if (newDirection == null) {
-                console.log("ERROR: No direction found")
+            let ignoreLoop = true
+            newDirection = directionForWrappingPath(bitmap, direction, head, tail, ignoreLoop)
+            if (newDirection == false) {
+                newDirection = straightDirection(bitmap, direction, head, tail)
+                if (newDirection == false) {
+                    newDirection = perpDirection(bitmap, direction, head, tail)
+                    if (newDirection == false) {
+                        console.log("ERROR: No direction found")
+                    } else {
+                        console.log("Perpendicular direction chosen")
+                    }
+                } else {
+                    console.log("Straight direction chosen")
+                }
             } else {
-                console.log("Perpendicular direction chosen")
+                console.log("Wrapping path chosen ignoring loops")
             }
         } else {
             console.log("Wrapping path found")
@@ -264,7 +310,7 @@ window.changeDirection = ({
     if (head.x + DIR_VECS[direction][0] == food.x && head.y + DIR_VECS[direction][1] == food.y) {
         console.log('Food eaten!')
     }
-    let bitmap = deriveBitmap(head, tail, food, width, height)
+    let bitmap = deriveBitmap(direction, head, tail, food, width, height)
     console.log(bitmap)
 
     console.time('directionCalc')
@@ -283,6 +329,8 @@ window.changeDirection = ({
     let textarea = document.getElementsByTagName('textarea')[0]
     textarea.dataset.info = JSON.stringify(info)
     textarea.dataset.infoRead = false
+
+    prevHead = head
 
     return newDirection
 }
