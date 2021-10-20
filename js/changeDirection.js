@@ -1,169 +1,191 @@
 // Don't delete these lines
 console.log("TESTING TESTING")
+
+const DIR_VECS = {
+    left: [-1, 0],
+    right: [1, 0],
+    up: [0, 1],
+    down: [0, -1]
+}
+const X = 40
+const Y = 40
+const bitmapLabels = {
+    EMPTY: 0,
+    TAIL: 1,
+    NEIGHBOUR: 2,
+    HEAD: 3,
+    FOOD: 5,
+}
+var foodIsNeighbour = false
+const MAX_RECURSION_DEPTH = 100
+
 function deriveBitmap(head, tail, food, width, height) {
     let bitmap = new Array(width)
     for (let x = 0; x < width; x++) {
         bitmap[x] = new Array(height)
         for (let y = 0; y < height; y++) {
-            bitmap[x][y] = 0
+            bitmap[x][y] = bitmapLabels.EMPTY
         }
     }
     for (let seg of tail) {
-        bitmap[seg.x][seg.y] = 1
+        bitmap[seg.x][seg.y] = bitmapLabels.TAIL
+        for (let dir in DIR_VECS) {
+            let x = mod(seg.x + DIR_VECS[dir][0], X)
+            let y = mod(seg.y + DIR_VECS[dir][1], Y)
+            bitmap[x][y] = bitmapLabels.NEIGHBOUR
+        }
     }
-    // bitmap[head.x][head.y] = 2
-    bitmap[food.x][food.y] = 3
+    // bitmap[head.x][head.y] = bitmapLabels.HEAD
+    if (bitmap[food.x][food.y] == bitmapLabels.NEIGHBOUR) {
+        foodIsNeighbour = true
+    } else {
+        foodIsNeighbour = false
+    }
+    bitmap[food.x][food.y] = bitmapLabels.FOOD
     return bitmap
 }
-
-// function chooseXDirection(dx) {
-//     let newDirection
-//     if (dx > 0) {
-//         newDirection = "right"
-//     } else {
-//         newDirection = "left"
-//     }
-//     return newDirection
-// }
-
-// function chooseYDirection(dy) {
-//     let newDirection
-//     if (dy > 0) {
-//         newDirection = "up"
-//     } else {
-//         newDirection = "down"
-//     }
-//     return newDirection
-// }
-
-// function calcNewDirection(state, bitmap) {
-//     let { direction, head, food, tail, width, height } = state
-//     let dx = food.x - head.x
-//     let dy = food.y - head.y
-//     let newDirection = null
-
-//     if (Math.abs(dx) < Math.abs(dy)) {
-//         newDirection = chooseXDirection(dx)
-//     } else {
-//         newDirection = chooseYDirection(dy)
-//     }
-
-//     if (direction == "right" && dx == 1) {
-//         newDirection = chooseYDirection(dy)
-//     } else if (direction == "left" && dx == -1) {
-//         newDirection = chooseYDirection(dy)
-//     } else if (direction == "up" && dy == 1) {
-//         newDirection = chooseXDirection(dx)
-//     } else if (direction == "down" && dy == -1) {
-//         newDirection = chooseXDirection(dx)
-//     }
-
-//     if ((direction == "right" | direction == "left") && dy == 0) {
-//         newDirection = direction
-//     } else if ((direction == "up" | direction == "down") && dx == 0) {
-//         newDirection = direction
-//     }
-
-//     return newDirection
-// }
 
 function mod(x, n) {
     return ((x % n) + n) % n
 }
 
-function rankDirections(head, food, X, Y) {
+function rankDirections(possDirs, direction, head, food) {
     let diffs = {
         left: mod(-(food.x - head.x), X),
         right: mod(food.x - head.x, X),
         up: mod(food.y - head.y, Y),
         down: mod(-(food.y - head.y), Y),
     }
-    let sortable = []
+
     for (let dir in diffs) {
+        if (diffs[dir] == 0) {
+            diffs[dir] = X
+        }
+    }
+    // if (Object.values(diffs).every(function(diff) { diff == X })) {
+    //     possDirs = [direction]
+    // }
+
+    let sortable = []
+    for (let dir of possDirs) {
         sortable.push([dir, diffs[dir]])
     }
     sortable.sort(function(a, b) {
         return Math.abs(a[1]) - Math.abs(b[1])
     })
 
-
-    let inds = []
-    for (let i = 0; i < sortable.length; i++) {
-        let x = sortable[i]
-        if (x[1] == 1 | x[1] == X - 1) {
-            inds.push(i)
-        }
-    }
-    let end = []
-    for (let i of inds.reverse()) {
-        end.unshift(sortable[i])
-        sortable.splice(i, 1)
-    }
-    sortable = sortable.concat(end)
-
-    inds = []
-    for (let i = 0; i < sortable.length; i++) {
-        let x = sortable[i]
-        if (x[1] == 0) {
-            inds.push(i)
-        }
-    }
-    end = []
-    for (let i of inds.reverse()) {
-        end.unshift(sortable[i])
-        sortable.splice(i, 1)
-    }
-    sortable = sortable.concat(end)
-
-    return sortable.map(function(x) {
+    let rankedDirs = sortable.map(function(x) {
         return x[0]
     })
+
+    return rankedDirs
 }
 
-function recurseForDirection(bitmap, head, tail, food) {
-    if (bitmap[head.x][head.y] == 1) {
+function isValidPos(bitmap, nextPos) {
+    if (bitmap[nextPos.x][nextPos.y] == bitmapLabels.TAIL)
         return false
-    } else if (bitmap[head.x][head.y] == 3) {
-        return true
+    if (bitmap[nextPos.x][nextPos.y] == bitmapLabels.NEIGHBOUR)
+        return false
+    return true
+}
+
+function calcSafeDirs(bitmap, head, direction) {
+    let possDirs = []
+    let oppDirections = {
+        left: 'right',
+        right: 'left',
+        down: 'up',
+        up: 'down',
     }
 
-    let X = bitmap.length
-    let Y = bitmap[0].length
-
-    let vecs = {
-        left: [-1, 0],
-        right: [1, 0],
-        up: [0, 1],
-        down: [0, -1],
-    }
-
-    let rankedDirs = rankDirections(head, food, X, Y)
-    for (let dir of rankedDirs) {
-        let vec = vecs[dir]
-        let newHead = { 
-            x: mod(head.x + vec[0], X),
-            y: mod(head.y + vec[1], Y),
+    for (let dir in DIR_VECS) {
+        if (dir == oppDirections[direction]) {
+            continue
         }
-        let newBitmap = bitmap.map(function(arr) {
-            return arr.slice()
-        })
-        let newTail = tail.slice(1,)
-        newTail.push(head)
+        let nextPos = {
+            x: mod(head.x + DIR_VECS[dir][0], X),
+            y: mod(head.y + DIR_VECS[dir][1], Y)
+        }
         
-        // newBitmap[head.x][head.y] = 0
-        // newBitmap[newHead.x][newHead.y] = 2
-        if (tail.length) {
-            newBitmap[head.x][head.y] = 1
-            let endSeg = tail[0]
-            newBitmap[endSeg.x][endSeg.y] = 0
+        if (bitmap[nextPos.x][nextPos.y] == bitmapLabels.TAIL) {
+            possDirs.push(dir)
         }
+    }
+    return possDirs
+}
+
+function calcPossDirections(bitmap, head, direction) {
+    let possDirs = []
+    let oppDirections = {
+        left: 'right',
+        right: 'left',
+        down: 'up',
+        up: 'down',
+    }
+
+    for (let dir in DIR_VECS) {
+        if (dir == oppDirections[direction]) {
+            continue
+        }
+        let nextPos = {
+            x: mod(head.x + DIR_VECS[dir][0], X),
+            y: mod(head.y + DIR_VECS[dir][1], Y)
+        }
+        
+        if (isValidPos(bitmap, nextPos)) {
+            possDirs.push(dir)
+        }
+    }
+    return possDirs
+}
+
+function calcNewHead(head, direction) {
+    return {
+        x: mod(head.x + DIR_VECS[direction][0], X),
+        y: mod(head.y + DIR_VECS[direction][1], Y)
+    }
+}
+
+function recurseForDirection(bitmap, direction, head, tail, food, depth=0) {
+    let newHead = calcNewHead(head, direction)
+    let newTail = []
+    let newBitmap = bitmap.map(function(arr) {
+        return arr.slice()
+    })
+    if (tail.length) {
+        newBitmap[head.x][head.y] = 1
+        let endSeg = tail[0]
+        newBitmap[endSeg.x][endSeg.y] = 0
+        newTail = tail.slice(1,)
+        newTail.push(head)
+    }
+
+    
+    let possDirs = calcPossDirections(newBitmap, newHead, direction)
+
+    if (bitmap[newHead.x][newHead.y] == bitmapLabels.FOOD) {
+        console.log('Food eaten! Returning...')
+        return possDirs[0]
+    } else if (foodIsNeighbour) {
+        console.log('Food inaccessible. Random direction selected. Returning...')
+        return possDirs[0]
+    } else if (depth > MAX_RECURSION_DEPTH) {
+        console.log('Max recursion level reached. Returning...')
+        let safeDirs = calcSafeDirs(newBitmap, newHead, direction)
+        return safeDirs[0]
+    }
+
+    let rankedDirs = rankDirections(possDirs, direction, newHead, food)
+
+    for (let dir of rankedDirs) {
         console.log({
             newBitmap: newBitmap,
+            dir: dir,
             newHead: newHead,
-            tail: tail,
+            newTail: newTail,
             food: food,
         })
-        let isPath = recurseForDirection(newBitmap, newHead, newTail, food)
+        let isPath = recurseForDirection(newBitmap, dir, newHead, newTail, food, depth+1)
         if (isPath) {
             return dir
         }
@@ -175,13 +197,52 @@ function calcNewDirection(state, bitmap) {
     let { direction, head, food, tail, width, height } = state
     
     console.log("Calculating direction...")
-    let newDirection = recurseForDirection(bitmap, head, tail, food)
+    let newDirection = recurseForDirection(bitmap, direction, head, tail, food)
+    if (newDirection == false) {
+        newDirection = calcPossDirections(bitmap, calcNewHead(head, direction), direction)[0]
+    }
 
     return newDirection
 }
 
-function myChangeDirection(state) {
-    let { direction, head, food, tail, width, height } = state
+window.changeDirection = ({
+    direction,
+    head,
+    food,
+    tail,
+    width,
+    height,
+}) => {  
+    let state = {
+        direction: direction,
+        head: head,
+        food: food,
+        tail: tail,
+        width: width,
+        height: height,
+    }
+
+    if (head.x + DIR_VECS[direction][0] == food.x && head.y + DIR_VECS[direction][1] == food.y) {
+        console.log('Food eaten!')
+    }
     let bitmap = deriveBitmap(head, tail, food, width, height)
+
+    console.time('directionCalc')
     let newDirection = calcNewDirection(state, bitmap)
+    console.timeEnd('directionCalc')
+
+    let debug = {
+        bitmap: bitmap
+    }
+    
+    let info = {
+        state: state,
+        debug: debug
+    }
+
+    let textarea = document.getElementsByTagName('textarea')[0]
+    textarea.dataset.info = JSON.stringify(info)
+    textarea.dataset.infoRead = false
+
+    return newDirection
 }
